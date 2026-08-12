@@ -151,7 +151,7 @@ group3 = Group.objects.create(
     faculty="Факультет информационных технологий"
 )
 
-print("✓ Группы созданы")
+print("Группы созданы")
 
 # Курсы
 course_db = Course.objects.create(
@@ -178,7 +178,7 @@ course_web = Course.objects.create(
 )
 course_web.groups.add(group3)
 
-print("✓ Курсы созданы")
+print("Курсы созданы")
 
 # Занятия
 lesson1 = Lesson.objects.create(
@@ -241,7 +241,7 @@ lesson3.groups.add(group3)
 lesson3.rooms.add(Room.objects.get(id="room-3-101"))
 lesson3.attendees.add(teacher3)
 
-print("✓ Занятия созданы")
+print("Занятия созданы")
 
 print("=" * 50)
 print("Тестовые данные созданы!")
