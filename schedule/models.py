@@ -14,11 +14,11 @@ class BaseModel(models.Model):
     class Meta:
         abstract = True
     
-    def __str__(self):
+    def __str__(self) -> str:
         return self.short_name
 
 class Building(BaseModel):
-    """Корпус (например, 1, 2, 3)"""
+    """Корпус"""
     
     class Meta:
         verbose_name = 'Корпус'
@@ -26,7 +26,7 @@ class Building(BaseModel):
         ordering = ['short_name']
 
 class Subject(BaseModel):
-    """Предмет (например, Базы данных, Python)"""
+    """Предмет"""
     
     class Meta:
         verbose_name = 'Предмет'
@@ -49,14 +49,14 @@ class Person(BaseModel):
         return self.full_name or self.short_name
 
 class GroupType(BaseModel):
-    """Тип группы (например, академическая)"""
+    """Тип группы"""
     
     class Meta:
         verbose_name = 'Тип группы'
         verbose_name_plural = 'Типы групп'
 
 class Group(BaseModel):
-    """Группа студентов (например, 22ИП2б)"""
+    """Группа студентов"""
     group_type = models.ForeignKey(GroupType, on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Тип группы')
     members = models.ManyToManyField(Person, through='GroupMembership', related_name='groups', verbose_name='Участники')
     valid_from = models.DateField('Действительно с', null=True, blank=True)
@@ -92,7 +92,7 @@ class GroupMembership(models.Model):
         return f"{self.person} в {self.group}"
 
 class PersonRole(BaseModel):
-    """Роль человека (преподаватель, студент, староста)"""
+    """Роль человека"""
     
     class Meta:
         verbose_name = 'Роль'
@@ -117,14 +117,14 @@ class Room(BaseModel):
         return self.full_name
     
     @property
-    def full_name(self):
+    def full_name(self) -> str:
         """Возвращает полное название в формате 1-237"""
         if self.building_number and self.room_number:
             return f"{self.building_number}-{self.room_number}"
         return self.short_name
 
 class CourseType(BaseModel):
-    """Тип курса (базовый, профильный)"""
+    """Тип курса"""
     
     class Meta:
         verbose_name = 'Тип курса'
@@ -231,13 +231,13 @@ class Lesson(ScheduleElement):
         groups_str = ", ".join([g.short_name for g in self.groups.all()])
         return f"{self.short_name} ({groups_str})"
     
-    def get_groups_display(self):
+    def get_groups_display(self) -> str:
         return ", ".join([g.short_name for g in self.groups.all()])
     
-    def get_rooms_display(self):
+    def get_rooms_display(self) -> str:
         return ", ".join([room.full_name for room in self.rooms.all()])
     
-    def get_teachers_display(self):
+    def get_teachers_display(self) -> str:
         return ", ".join([p.full_name for p in self.attendees.all()])
 
 class LessonAttendance(models.Model):
@@ -265,16 +265,16 @@ class Gap(ScheduleElement):
     def __str__(self):
         return f"Пробел для {self.applies_to}"
     
-    def is_cancellation(self):
+    def is_cancellation(self) -> bool:
         return self.resolutions and self.resolutions[-1].get('type') == 'cancellation'
     
-    def is_substitution(self):
+    def is_substitution(self) -> bool:
         return self.resolutions and self.resolutions[-1].get('type') == 'substitution'
     
-    def is_reschedule(self):
+    def is_reschedule(self) -> bool:
         return self.resolutions and self.resolutions[-1].get('type') == 'reschedule'
     
-    def get_resolution_type(self):
+    def get_resolution_type(self) -> str | None:
         if self.resolutions:
             return self.resolutions[-1].get('type')
         return None

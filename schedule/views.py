@@ -1,11 +1,11 @@
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpRequest
 from django.views.decorators.csrf import csrf_exempt
 from .models import Group, Lesson, Gap, Person
 from .services.schedule_service import ScheduleService
 import json
 from datetime import datetime
 
-def index(request):
+def index(request: HttpRequest) -> JsonResponse:
     return JsonResponse({
         'status': 'ok',
         'message': 'OpenT8 Schedule API',
@@ -19,7 +19,7 @@ def index(request):
         }
     })
 
-def group_list(request):
+def group_list(request: HttpRequest) -> JsonResponse:
     groups = Group.objects.all()
     data = [{
         'id': g.id,
@@ -30,7 +30,7 @@ def group_list(request):
     } for g in groups]
     return JsonResponse({'groups': data})
 
-def group_schedule(request, group_id):
+def group_schedule(request: HttpRequest, group_id: str) -> JsonResponse:
     try:
         group = Group.objects.get(id=group_id)
     except Group.DoesNotExist:
@@ -75,7 +75,7 @@ def group_schedule(request, group_id):
         'lessons': result
     })
 
-def lesson_history(request, lesson_id):
+def lesson_history(request: HttpRequest, lesson_id: str) -> JsonResponse:
     try:
         lesson = Lesson.objects.get(id=lesson_id)
     except Lesson.DoesNotExist:
@@ -98,7 +98,7 @@ def lesson_history(request, lesson_id):
     })
 
 @csrf_exempt
-def apply_change(request, lesson_id):
+def apply_change(request: HttpRequest, lesson_id: str) -> JsonResponse:
     if request.method != 'POST':
         return JsonResponse({'error': 'Метод не поддерживается'}, status=405)
     
@@ -146,7 +146,7 @@ def apply_change(request, lesson_id):
         return JsonResponse({'error': str(e)}, status=500)
 
 @csrf_exempt
-def import_data(request):
+def import_data(request: HttpRequest) -> JsonResponse:
     if request.method != 'POST':
         return JsonResponse({'error': 'Метод не поддерживается'}, status=405)
     

@@ -1,13 +1,12 @@
-from typing import List, Dict, Optional
 from datetime import datetime, date, timedelta
 from django.db import transaction
-from ..models import Group, Lesson, Gap, Person
+from ..models import Group, Lesson, Gap
 
 class ScheduleService:
     """Сервис для работы с расписанием"""
     
     @staticmethod
-    def get_lessons_for_group(group: Group, start_date: date, end_date: date) -> List[Dict]:
+    def get_lessons_for_group(group: Group, start_date: date, end_date: date) -> list[dict]:
         """Получить занятия для группы за период"""
         lessons = Lesson.objects.filter(groups=group)
         
@@ -28,36 +27,32 @@ class ScheduleService:
         return result
     
     @staticmethod
-    def _matches_date(expr: Dict, date: date) -> bool:
-        """Проверить соответствие выражения дате"""
+    def _matches_date(expr: dict, target_date: date) -> bool:
+        """Проверить соответствие выражения дате."""
         expr_type = expr.get('type')
-        
+
         if expr_type == 'onetime':
-            expr_date = expr.get('startTimepoint', '').split('T')[0]
-            return expr_date == date.isoformat()
-        
-        elif expr_type == 'weekly':
-            start = expr.get('startTimepoint', '').split('T')[0]
-            
+            expr_date = str(expr.get('startTimepoint', '')).split('T')[0]
+            return expr_date == target_date.isoformat()
+
+        if expr_type == 'weekly':
+            start = str(expr.get('startTimepoint', '')).split('T')[0]
             expr_day = datetime.strptime(start, '%Y-%m-%d').weekday()
-            target_day = date.weekday()
-            
+            target_day = target_date.weekday()
+
             if expr_day != target_day:
                 return False
-            
-            valid_from = expr.get('validFrom', start)
-            valid_to = expr.get('validTo', '9999-12-31')
-            
-            if date.isoformat() < valid_from or date.isoformat() > valid_to:
-                return False
-            
-            return True
-        
+
+            valid_from = str(expr.get('validFrom', start)).split('T')[0]
+            valid_to = str(expr.get('validTo', '9999-12-31')).split('T')[0]
+
+            return valid_from <= target_date.isoformat() <= valid_to
+
         return False
     
     @staticmethod
     @transaction.atomic
-    def apply_modification(lesson: Lesson, change_type: str, **kwargs) -> Gap:
+    def apply_modification(lesson: Lesson, change_type: str, **kwargs: object) -> Gap:
         """Применить изменение к занятию"""
         gap = Gap.objects.create(
             applies_to=lesson,
@@ -131,7 +126,7 @@ class ScheduleService:
         return gap
     
     @staticmethod
-    def get_current_lesson(lesson: Lesson) -> Optional[Lesson]:
+    def get_current_lesson(lesson: Lesson) -> Lesson | None:
         """Получить актуальное состояние занятия"""
         gaps = Gap.objects.filter(applies_to=lesson).order_by('-created_at')
         
@@ -159,7 +154,7 @@ class ScheduleService:
         return lesson
     
     @staticmethod
-    def get_modification_history(lesson: Lesson) -> List[Dict]:
+    def get_modification_history(lesson: Lesson) -> list[dict]:
         """Получить историю изменений занятия"""
         gaps = Gap.objects.filter(applies_to=lesson).order_by('created_at')
         

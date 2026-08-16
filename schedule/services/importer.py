@@ -4,13 +4,17 @@ from django.db import transaction
 from ..models import *
 
 class OpenT8Importer:
-    def __init__(self, json_data):
-        self.data = json_data if isinstance(json_data, dict) else json.loads(json_data)
-        self.id_map = {}
-        self.stats = {'created': 0, 'updated': 0, 'errors': 0}
+    def __init__(self, json_data: dict | str) -> None:
+        if isinstance(json_data, dict):
+            self.data = json_data
+        else:
+            self.data = json.loads(json_data)
+
+        self.id_map: dict[str, models.Model] = {}
+        self.stats: dict[str, int] = {'created': 0, 'updated': 0, 'errors': 0,}
     
     @transaction.atomic
-    def import_all(self):
+    def import_all(self) -> dict[str, int]:
         print("Начинаем импорт данных OpenT8...")
         self._import_buildings()
         self._import_subjects()
@@ -23,7 +27,7 @@ class OpenT8Importer:
         print(f"Импорт завершен. Создано: {self.stats['created']}, Обновлено: {self.stats['updated']}")
         return self.stats
     
-    def _save_model(self, model, data, defaults):
+    def _save_model(self, model: type[models.Model], data: dict, defaults: dict) -> models.Model | None:
         try:
             obj, created = model.objects.update_or_create(id=data['id'], defaults=defaults)
             self.stats['created' if created else 'updated'] += 1
