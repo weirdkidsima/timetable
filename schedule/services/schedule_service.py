@@ -1,6 +1,6 @@
 from datetime import datetime, date, timedelta
 from django.db import transaction
-from ..models import Group, Lesson, Gap
+from ..models import Group, Lesson, Gap, Person
 
 class ScheduleService:
     """Сервис для работы с расписанием"""
@@ -124,6 +124,44 @@ class ScheduleService:
             gap.save()
         
         return gap
+
+    @staticmethod
+    @transaction.atomic
+    def apply_change_by_ids(
+        lesson_id: str,
+        change_type: str | None,
+        teacher_id: str | None = None,
+        reason: str = '',
+        notes: str = '',
+        message: str = 'Занятие отменено',
+        expressions: list | None = None,
+    ) -> Gap:
+        """
+        Применить изменение к занятию по его ID.
+        Бросает Lesson.DoesNotExist, Person.DoesNotExist или ValueError.
+        """
+        if change_type not in {'cancellation', 'substitution', 'reschedule'}:
+            raise ValueError(
+                'Укажите тип изменения (cancellation/substitution/reschedule)'
+            )
+
+        lesson = Lesson.objects.get(id=lesson_id)
+
+        kwargs: dict = {
+            'reason': reason,
+            'notes': notes,
+        }
+
+        if change_type == 'substitution' and teacher_id:
+            kwargs['teacher'] = Person.objects.get(id=teacher_id)
+        
+        if change_type == 'reschedule' and expressions:
+            kwargs['expressions'] = expressions
+        
+        if change_type == 'cancellation':
+            kwargs['message'] = message
+
+        return ScheduleService.apply_modification(lesson, change_type, **kwargs)
     
     @staticmethod
     def get_current_lesson(lesson: Lesson) -> Lesson | None:

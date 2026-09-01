@@ -71,45 +71,31 @@ def lesson_history(request: HttpRequest, lesson_id: str) -> JsonResponse:
 def apply_change(request: HttpRequest, lesson_id: str) -> JsonResponse:
     if request.method != 'POST':
         return JsonResponse({'error': 'Метод не поддерживается'}, status=405)
-    
-    try:
-        lesson = Lesson.objects.get(id=lesson_id)
-    except Lesson.DoesNotExist:
-        return JsonResponse({'error': 'Занятие не найдено'}, status=404)
-    
+
     try:
         data = json.loads(request.body)
-        change_type = data.get('type')
         
-        if not change_type:
-            return JsonResponse({'error': 'Укажите тип изменения (cancellation/substitution/reschedule)'}, status=400)
-        
-        kwargs = {
-            'reason': data.get('reason', ''),
-            'notes': data.get('notes', ''),
-        }
-        
-        if change_type == 'substitution' and data.get('teacher_id'):
-            try:
-                teacher = Person.objects.get(id=data['teacher_id'])
-                kwargs['teacher'] = teacher
-            except Person.DoesNotExist:
-                return JsonResponse({'error': 'Преподаватель не найден'}, status=404)
-        
-        if change_type == 'reschedule' and data.get('expressions'):
-            kwargs['expressions'] = data['expressions']
-        
-        if change_type == 'cancellation':
-            kwargs['message'] = data.get('message', 'Занятие отменено')
-        
-        gap = ScheduleService.apply_modification(lesson, change_type, **kwargs)
-        
+        gap = ScheduleService.apply_change_by_ids(
+            lesson_id=lesson_id,
+            change_type=data.get('type'),
+            teacher_id=data.get('teacher_id'),
+            reason=data.get('reason', ''),
+            notes=data.get('notes', ''),
+            message=data.get('message', 'Занятие отменено'),
+            expressions=data.get('expressions'),
+        )
+
         return JsonResponse({
             'status': 'success',
-            'message': f'Изменение {change_type} применено',
-            'gap_id': gap.id
+            'message': f"Изменение {data.get('type')} применено",
+            'gap_id': gap.id,
         })
-        
+    except Lesson.DoesNotExist:
+        return JsonResponse({'error': 'Занятие не найдено'}, status=404)
+    except Person.DoesNotExist:
+        return JsonResponse({'error': 'Преподаватель не найден'}, status=404)
+    except ValueError as exc:
+        return JsonResponse({'error': str(exc)}, status=400)
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Неверный JSON'}, status=400)
     except Exception as e:
