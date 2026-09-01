@@ -2,6 +2,7 @@ from django.http import JsonResponse, HttpRequest
 from django.views.decorators.csrf import csrf_exempt
 from .models import Group, Lesson, Gap, Person
 from .services.schedule_service import ScheduleService
+from .serializers import serialize_group
 import json
 from datetime import datetime
 
@@ -21,13 +22,7 @@ def index(request: HttpRequest) -> JsonResponse:
 
 def group_list(request: HttpRequest) -> JsonResponse:
     groups = Group.objects.all()
-    data = [{
-        'id': g.id,
-        'short_name': g.short_name,
-        'long_name': g.long_name,
-        'course_number': g.course_number,
-        'faculty': g.faculty,
-    } for g in groups]
+    data =  [serialize_group(group) for group in groups]
     return JsonResponse({'groups': data})
 
 def group_schedule(request: HttpRequest, group_id: str) -> JsonResponse:
