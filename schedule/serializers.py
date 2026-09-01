@@ -30,15 +30,28 @@ def serialize_schedule_item(item: dict) -> dict:
     }
 
 
-def serialize_group_schedule(
-    group: Group,
-    start_date: str,
-    end_date: str,
-    items: list[dict],
-) -> dict:
+def serialize_group_schedule(group: Group, start_date: str, end_date: str, items: list[dict]) -> dict:
     return {
         'group': group.short_name,
         'start_date': start_date,
         'end_date': end_date,
         'lessons': [serialize_schedule_item(item) for item in items],
+    }
+
+def serialize_lesson_history(lesson: Lesson, history: list[dict]) -> dict:
+    return {
+        'lesson': {
+            'id': lesson.id,
+            'short_name': lesson.short_name,
+            'long_name': lesson.long_name,
+        },
+        'history': [
+            {
+                'date': item['date'],
+                'type': item['type'],
+                'reasons': item['reasons'],
+                'resolutions': item['resolutions'],
+            }
+            for item in history
+        ],
     }

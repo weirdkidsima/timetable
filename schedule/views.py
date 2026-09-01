@@ -2,7 +2,7 @@ from django.http import JsonResponse, HttpRequest
 from django.views.decorators.csrf import csrf_exempt
 from .models import Group, Lesson, Gap, Person
 from .services.schedule_service import ScheduleService
-from .serializers import serialize_group, serialize_group_schedule
+from .serializers import serialize_group, serialize_group_schedule, serialize_lesson_history
 import json
 from datetime import datetime
 
@@ -62,22 +62,10 @@ def lesson_history(request: HttpRequest, lesson_id: str) -> JsonResponse:
         lesson = Lesson.objects.get(id=lesson_id)
     except Lesson.DoesNotExist:
         return JsonResponse({'error': 'Занятие не найдено'}, status=404)
-    
+
     history = ScheduleService.get_modification_history(lesson)
-    
-    return JsonResponse({
-        'lesson': {
-            'id': lesson.id,
-            'short_name': lesson.short_name,
-            'long_name': lesson.long_name,
-        },
-        'history': [{
-            'date': h['date'],
-            'type': h['type'],
-            'reasons': h['reasons'],
-            'resolutions': h['resolutions'],
-        } for h in history]
-    })
+
+    return JsonResponse(serialize_lesson_history(lesson, history))
 
 @csrf_exempt
 def apply_change(request: HttpRequest, lesson_id: str) -> JsonResponse:
