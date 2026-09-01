@@ -2,7 +2,7 @@ from django.http import JsonResponse, HttpRequest
 from django.views.decorators.csrf import csrf_exempt
 from .models import Group, Lesson, Gap, Person
 from .services.schedule_service import ScheduleService
-from .serializers import serialize_group
+from .serializers import serialize_group, serialize_group_schedule
 import json
 from datetime import datetime
 
@@ -22,7 +22,7 @@ def index(request: HttpRequest) -> JsonResponse:
 
 def group_list(request: HttpRequest) -> JsonResponse:
     groups = Group.objects.all()
-    data =  [serialize_group(group) for group in groups]
+    data = [serialize_group(group) for group in groups]
     return JsonResponse({'groups': data})
 
 def group_schedule(request: HttpRequest, group_id: str) -> JsonResponse:
@@ -30,45 +30,32 @@ def group_schedule(request: HttpRequest, group_id: str) -> JsonResponse:
         group = Group.objects.get(id=group_id)
     except Group.DoesNotExist:
         return JsonResponse({'error': 'Группа не найдена'}, status=404)
-    
+
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
-    
+
     if not start_date or not end_date:
-        return JsonResponse({'error': 'Укажите start_date и end_date в формате YYYY-MM-DD'}, status=400)
-    
+        return JsonResponse(
+            {'error': 'Укажите start_date и end_date в формате YYYY-MM-DD'},
+            status=400,
+        )
+
     try:
         start = datetime.strptime(start_date, '%Y-%m-%d').date()
         end = datetime.strptime(end_date, '%Y-%m-%d').date()
     except ValueError:
         return JsonResponse({'error': 'Неверный формат даты'}, status=400)
-    
+
     lessons = ScheduleService.get_lessons_for_group(group, start, end)
-    
-    result = []
-    for item in lessons:
-        lesson = item['lesson']
-        result.append({
-            'date': item['date'],
-            'lesson': {
-                'id': lesson.id,
-                'short_name': lesson.short_name,
-                'long_name': lesson.long_name,
-                'lesson_type': lesson.lesson_type,
-                'groups': [g.short_name for g in lesson.groups.all()],
-                'rooms': [r.full_name for r in lesson.rooms.all()],
-                'teachers': [p.full_name for p in lesson.attendees.all()],
-                'time': item['expression'],
-                'is_online': lesson.is_online,
-            }
-        })
-    
-    return JsonResponse({
-        'group': group.short_name,
-        'start_date': start_date,
-        'end_date': end_date,
-        'lessons': result
-    })
+
+    return JsonResponse(
+        serialize_group_schedule(
+            group,
+            start_date,
+            end_date,
+            lessons,
+        )
+    )
 
 def lesson_history(request: HttpRequest, lesson_id: str) -> JsonResponse:
     try:
