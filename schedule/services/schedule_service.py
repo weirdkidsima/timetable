@@ -1,55 +1,92 @@
 from datetime import datetime, date, timedelta
+
 from django.db import transaction
+from django.utils import timezone
+
 from ..models import Group, Lesson, Gap, Person
+from ..datetime_utils import parse_iso_datetime, parse_iso_date, to_iso_string, normalize_temporal_expression
+
 
 class ScheduleService:
     """Сервис для работы с расписанием"""
-    
+
     @staticmethod
-    def get_lessons_for_group(group: Group, start_date: date, end_date: date) -> list[dict]:
+    def get_lessons_for_group(
+        group: Group,
+        start_date: date,
+        end_date: date,
+    ) -> list[dict]:
         """Получить занятия для группы за период"""
         lessons = Lesson.objects.filter(groups=group)
-        
+
         result = []
         current_date = start_date
-        
+
         while current_date <= end_date:
             for lesson in lessons:
                 for expr in lesson.temporal_expressions:
                     if ScheduleService._matches_date(expr, current_date):
                         result.append({
                             'lesson': lesson,
-                            'date': current_date.isoformat(),
-                            'expression': expr
+                            'date': to_iso_string(current_date),
+                            'expression': normalize_temporal_expression(expr),
                         })
             current_date += timedelta(days=1)
-        
+
         return result
-    
+
     @staticmethod
     def _matches_date(expr: dict, target_date: date) -> bool:
         """Проверить соответствие выражения дате."""
         expr_type = expr.get('type')
 
         if expr_type == 'onetime':
-            expr_date = str(expr.get('startTimepoint', '')).split('T')[0]
-            return expr_date == target_date.isoformat()
-
-        if expr_type == 'weekly':
-            start = str(expr.get('startTimepoint', '')).split('T')[0]
-            expr_day = datetime.strptime(start, '%Y-%m-%d').weekday()
-            target_day = target_date.weekday()
-
-            if expr_day != target_day:
+            try:
+                start_dt = parse_iso_datetime(
+                    expr.get('startTimepoint'),
+                    'startTimepoint',
+                )
+                local_dt = timezone.localtime(start_dt)
+                return local_dt.date() == target_date
+            except ValueError:
                 return False
 
-            valid_from = str(expr.get('validFrom', start)).split('T')[0]
-            valid_to = str(expr.get('validTo', '9999-12-31')).split('T')[0]
+        if expr_type == 'weekly':
+            try:
+                start_dt = parse_iso_datetime(
+                    expr.get('startTimepoint'),
+                    'startTimepoint',
+                )
+                local_dt = timezone.localtime(start_dt)
+            except ValueError:
+                return False
 
-            return valid_from <= target_date.isoformat() <= valid_to
+            if local_dt.weekday() != target_date.weekday():
+                return False
+
+            valid_from_raw = expr.get('validFrom')
+            valid_to_raw = expr.get('validTo')
+
+            if valid_from_raw:
+                try:
+                    valid_from_date = parse_iso_date(valid_from_raw, 'validFrom')
+                    if valid_from_date and target_date < valid_from_date:
+                        return False
+                except ValueError:
+                    pass
+
+            if valid_to_raw:
+                try:
+                    valid_to_date = parse_iso_date(valid_to_raw, 'validTo')
+                    if valid_to_date and target_date > valid_to_date:
+                        return False
+                except ValueError:
+                    pass
+
+            return True
 
         return False
-    
+
     @staticmethod
     @transaction.atomic
     def apply_modification(lesson: Lesson, change_type: str, **kwargs: object) -> Gap:
@@ -66,7 +103,7 @@ class ScheduleService:
                 'notes': kwargs.get('notes', ''),
             }]
         )
-        
+
         if change_type == 'substitution':
             new_lesson = Lesson.objects.create(
                 type='lesson',
@@ -80,19 +117,19 @@ class ScheduleService:
             )
             new_lesson.groups.set(lesson.groups.all())
             new_lesson.rooms.set(lesson.rooms.all())
-            
+
             if kwargs.get('teacher'):
                 new_lesson.attendees.set([kwargs['teacher']])
             else:
                 new_lesson.attendees.set(lesson.attendees.all())
-            
+
             gap.resolutions = [{
                 'type': 'substitution',
                 'notes': kwargs.get('notes', ''),
                 'realizedBy': {'refType': 'lesson', 'refId': new_lesson.id}
             }]
             gap.save()
-        
+
         elif change_type == 'reschedule':
             new_lesson = Lesson.objects.create(
                 type='lesson',
@@ -107,14 +144,14 @@ class ScheduleService:
             new_lesson.groups.set(lesson.groups.all())
             new_lesson.rooms.set(lesson.rooms.all())
             new_lesson.attendees.set(lesson.attendees.all())
-            
+
             gap.resolutions = [{
                 'type': 'reschedule',
                 'notes': kwargs.get('notes', ''),
                 'realizedBy': {'refType': 'lesson', 'refId': new_lesson.id}
             }]
             gap.save()
-        
+
         elif change_type == 'cancellation':
             gap.resolutions = [{
                 'type': 'cancellation',
@@ -122,7 +159,7 @@ class ScheduleService:
                 'notes': kwargs.get('notes', ''),
             }]
             gap.save()
-        
+
         return gap
 
     @staticmethod
@@ -154,33 +191,34 @@ class ScheduleService:
 
         if change_type == 'substitution' and teacher_id:
             kwargs['teacher'] = Person.objects.get(id=teacher_id)
-        
+
         if change_type == 'reschedule' and expressions:
             kwargs['expressions'] = expressions
-        
+
         if change_type == 'cancellation':
             kwargs['message'] = message
 
         return ScheduleService.apply_modification(lesson, change_type, **kwargs)
-    
+
     @staticmethod
     def get_current_lesson(lesson: Lesson) -> Lesson | None:
         """Получить актуальное состояние занятия"""
         gaps = Gap.objects.filter(applies_to=lesson).order_by('-created_at')
-        
+
         if not gaps:
             return lesson
-        
+
         latest_gap = gaps.first()
+
         if not latest_gap.resolutions:
             return lesson
-        
+
         last_resolution = latest_gap.resolutions[-1]
         resolution_type = last_resolution.get('type')
-        
+
         if resolution_type == 'cancellation':
             return None
-        
+
         elif resolution_type in ['substitution', 'reschedule']:
             ref_data = last_resolution.get('realizedBy', {})
             if ref_data.get('refType') == 'lesson':
@@ -188,21 +226,21 @@ class ScheduleService:
                     return Lesson.objects.get(id=ref_data['refId'])
                 except Lesson.DoesNotExist:
                     return lesson
-        
+
         return lesson
-    
+
     @staticmethod
     def get_modification_history(lesson: Lesson) -> list[dict]:
         """Получить историю изменений занятия"""
         gaps = Gap.objects.filter(applies_to=lesson).order_by('created_at')
-        
+
         history = []
         for gap in gaps:
             history.append({
-                'date': gap.created_at.isoformat(),
+                'date': to_iso_string(gap.created_at),
                 'type': gap.resolutions[-1].get('type') if gap.resolutions else 'none',
                 'reasons': gap.reasons,
                 'resolutions': gap.resolutions,
             })
-        
+
         return history
