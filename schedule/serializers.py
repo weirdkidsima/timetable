@@ -1,4 +1,5 @@
 from .models import Group, Lesson
+from .datetime_utils import to_iso_string
 
 
 def serialize_group(group: Group) -> dict:
@@ -15,7 +16,7 @@ def serialize_schedule_item(item: dict) -> dict:
     lesson: Lesson = item['lesson']
 
     return {
-        'date': item['date'],
+        'date': item['date'], # ИСПРАВИТЬ
         'lesson': {
             'id': lesson.id,
             'short_name': lesson.short_name,
@@ -30,11 +31,11 @@ def serialize_schedule_item(item: dict) -> dict:
     }
 
 
-def serialize_group_schedule(group: Group, start_date: str, end_date: str, items: list[dict]) -> dict:
+def serialize_group_schedule(group: Group, start_dt: str, end_dt: str, items: list[dict]) -> dict:
     return {
         'group': group.short_name,
-        'start_date': start_date,
-        'end_date': end_date,
+        'start_date': to_iso_string(start_dt),
+        'end_date': to_iso_string(end_dt),
         'lessons': [serialize_schedule_item(item) for item in items],
     }
 

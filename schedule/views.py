@@ -3,8 +3,8 @@ from django.views.decorators.csrf import csrf_exempt
 from .models import Group, Lesson, Gap, Person
 from .services.schedule_service import ScheduleService
 from .serializers import serialize_group, serialize_group_schedule, serialize_lesson_history
+from .datetime_utils import parse_iso_datetime
 import json
-from datetime import datetime
 
 def index(request: HttpRequest) -> JsonResponse:
     return JsonResponse({
@@ -31,30 +31,28 @@ def group_schedule(request: HttpRequest, group_id: str) -> JsonResponse:
     except Group.DoesNotExist:
         return JsonResponse({'error': 'Группа не найдена'}, status=404)
 
-    start_date = request.GET.get('start_date')
-    end_date = request.GET.get('end_date')
+    start_date_raw = request.GET.get('start_date')
+    end_date_raw = request.GET.get('end_date')
 
-    if not start_date or not end_date:
+    if not start_date_raw or not end_date_raw:
         return JsonResponse(
-            {'error': 'Укажите start_date и end_date в формате YYYY-MM-DD'},
+            {'error': 'Укажите параметры start_date и end_date в формате ISO 8601'},
             status=400,
         )
 
     try:
-        start = datetime.strptime(start_date, '%Y-%m-%d').date()
-        end = datetime.strptime(end_date, '%Y-%m-%d').date()
-    except ValueError:
-        return JsonResponse({'error': 'Неверный формат даты'}, status=400)
+        start_dt = parse_iso_datetime(start_date_raw, 'start_date')
+        end_dt = parse_iso_datetime(end_date_raw, 'end_date')
+    except ValueError as exc:
+        return JsonResponse({'error': str(exc)}, status=400)
 
-    lessons = ScheduleService.get_lessons_for_group(group, start, end)
+    start_date = start_dt.date()
+    end_date = end_dt.date()
+
+    items = ScheduleService.get_lessons_for_group(group, start_date, end_date)
 
     return JsonResponse(
-        serialize_group_schedule(
-            group,
-            start_date,
-            end_date,
-            lessons,
-        )
+        serialize_group_schedule(group, start_dt, end_dt, items)
     )
 
 def lesson_history(request: HttpRequest, lesson_id: str) -> JsonResponse:
