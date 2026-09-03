@@ -1,10 +1,14 @@
 from django.http import JsonResponse, HttpRequest
 from django.views.decorators.csrf import csrf_exempt
+
 from .models import Group, Lesson, Gap, Person
 from .services.schedule_service import ScheduleService
+from .services.importer import OpenT8Importer
 from .serializers import serialize_group, serialize_group_schedule, serialize_lesson_history
 from .datetime_utils import parse_iso_datetime
+
 import json
+
 
 def index(request: HttpRequest) -> JsonResponse:
     return JsonResponse({
@@ -20,10 +24,12 @@ def index(request: HttpRequest) -> JsonResponse:
         }
     })
 
+
 def group_list(request: HttpRequest) -> JsonResponse:
     groups = Group.objects.all()
     data = [serialize_group(group) for group in groups]
     return JsonResponse({'groups': data})
+
 
 def group_schedule(request: HttpRequest, group_id: str) -> JsonResponse:
     try:
@@ -42,7 +48,7 @@ def group_schedule(request: HttpRequest, group_id: str) -> JsonResponse:
 
     try:
         start_dt = parse_iso_datetime(start_date_raw, 'start_date')
-        end_dt = parse_iso_datetime(end_date_raw, 'end_date')
+        end_dt = parse_iso_datetime(end_date_raw, 'end_date', end_of_day=True)
     except ValueError as exc:
         return JsonResponse({'error': str(exc)}, status=400)
 
@@ -55,6 +61,7 @@ def group_schedule(request: HttpRequest, group_id: str) -> JsonResponse:
         serialize_group_schedule(group, start_dt, end_dt, items)
     )
 
+
 def lesson_history(request: HttpRequest, lesson_id: str) -> JsonResponse:
     try:
         lesson = Lesson.objects.get(id=lesson_id)
@@ -65,6 +72,7 @@ def lesson_history(request: HttpRequest, lesson_id: str) -> JsonResponse:
 
     return JsonResponse(serialize_lesson_history(lesson, history))
 
+
 @csrf_exempt
 def apply_change(request: HttpRequest, lesson_id: str) -> JsonResponse:
     if request.method != 'POST':
@@ -72,7 +80,13 @@ def apply_change(request: HttpRequest, lesson_id: str) -> JsonResponse:
 
     try:
         data = json.loads(request.body)
-        
+
+        if not isinstance(data, dict):
+            return JsonResponse(
+                {'error': 'Тело запроса должно быть JSON-объектом'},
+                status=400,
+            )
+
         gap = ScheduleService.apply_change_by_ids(
             lesson_id=lesson_id,
             change_type=data.get('type'),
@@ -86,32 +100,34 @@ def apply_change(request: HttpRequest, lesson_id: str) -> JsonResponse:
         return JsonResponse({
             'status': 'success',
             'message': f"Изменение {data.get('type')} применено",
-            'gap_id': gap.id,
+            'gap_id': str(gap.id),
         })
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Неверный JSON'}, status=400)
     except Lesson.DoesNotExist:
         return JsonResponse({'error': 'Занятие не найдено'}, status=404)
     except Person.DoesNotExist:
         return JsonResponse({'error': 'Преподаватель не найден'}, status=404)
     except ValueError as exc:
         return JsonResponse({'error': str(exc)}, status=400)
-    except json.JSONDecodeError:
-        return JsonResponse({'error': 'Неверный JSON'}, status=400)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
 
 @csrf_exempt
 def import_data(request: HttpRequest) -> JsonResponse:
     if request.method != 'POST':
         return JsonResponse({'error': 'Метод не поддерживается'}, status=405)
-    
+
     try:
         data = json.loads(request.body)
-        from .services.importer import OpenT8Importer
+
         importer = OpenT8Importer(data)
         stats = importer.import_all()
+
         return JsonResponse({
             'status': 'ok',
-            'stats': stats
+            'stats': stats,
         })
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Неверный JSON'}, status=400)

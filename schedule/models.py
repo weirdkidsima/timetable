@@ -1,8 +1,11 @@
 from django.db import models
 import uuid
 
+def generate_id() -> str:
+    return str(uuid.uuid4())
+
 class BaseModel(models.Model):
-    id = models.CharField(max_length=100, primary_key=True, default=uuid.uuid4, editable=False)
+    id = models.CharField(max_length=100, primary_key=True, default=generate_id, editable=False)
     short_name = models.CharField('Краткое название', max_length=100)
     long_name = models.CharField('Полное название', max_length=200, blank=True)
     description = models.TextField('Описание', blank=True)

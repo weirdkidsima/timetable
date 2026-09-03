@@ -4,7 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from ..models import Group, Lesson, Gap, Person
-from ..datetime_utils import parse_iso_datetime, parse_iso_date, to_iso_string, normalize_temporal_expression
+from ..datetime_utils import parse_iso_datetime, parse_iso_date, to_iso_string, normalize_temporal_expression, validate_temporal_expressions
 
 
 class ScheduleService:
@@ -111,7 +111,7 @@ class ScheduleService:
                 long_name=f"Замена: {lesson.long_name}",
                 course=kwargs.get('course', lesson.course),
                 classification='substitution',
-                temporal_expressions=lesson.temporal_expressions,
+                temporal_expressions=validate_temporal_expressions(lesson.temporal_expressions,'lesson.temporal_expressions'),
                 lesson_type=lesson.lesson_type,
                 is_online=lesson.is_online,
             )
@@ -126,7 +126,7 @@ class ScheduleService:
             gap.resolutions = [{
                 'type': 'substitution',
                 'notes': kwargs.get('notes', ''),
-                'realizedBy': {'refType': 'lesson', 'refId': new_lesson.id}
+                'realizedBy': {'refType': 'lesson', 'refId': str(new_lesson.id)}
             }]
             gap.save()
 
@@ -137,7 +137,7 @@ class ScheduleService:
                 long_name=f"Перенос: {lesson.long_name}",
                 course=lesson.course,
                 classification='additional',
-                temporal_expressions=kwargs.get('expressions', lesson.temporal_expressions),
+                temporal_expressions=validate_temporal_expressions(kwargs.get('expressions', lesson.temporal_expressions),'temporal_expressions'),
                 lesson_type=lesson.lesson_type,
                 is_online=lesson.is_online,
             )
@@ -148,7 +148,7 @@ class ScheduleService:
             gap.resolutions = [{
                 'type': 'reschedule',
                 'notes': kwargs.get('notes', ''),
-                'realizedBy': {'refType': 'lesson', 'refId': new_lesson.id}
+                'realizedBy': {'refType': 'lesson', 'refId': str(new_lesson.id)}
             }]
             gap.save()
 
@@ -193,7 +193,7 @@ class ScheduleService:
             kwargs['teacher'] = Person.objects.get(id=teacher_id)
 
         if change_type == 'reschedule' and expressions:
-            kwargs['expressions'] = expressions
+            kwargs['expressions'] = validate_temporal_expressions(expressions, 'expressions')
 
         if change_type == 'cancellation':
             kwargs['message'] = message
